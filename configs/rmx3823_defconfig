@@ -1,0 +1,10 @@
+# Board deltas over arch:configs/common.config, soc:configs/sm8550.config and
+# os:configs/ipados.config. This file is merged last, so its values win.
+
+# soc:configs/sm8550.config sets CONFIG_XNU_NATIVE_ADRENO=y. It stays off until
+# Adreno740 and AdrenoMetal are added to [components] in board.toml, because the
+# kernel side needs the driver those components build.
+# CONFIG_XNU_NATIVE_ADRENO is not set
+
+# No storage component is selected for this board yet.
+# CONFIG_XNU_NATIVE_UFS is not set

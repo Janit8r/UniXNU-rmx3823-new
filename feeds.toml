@@ -1,0 +1,6 @@
+[[source]]
+name = "sm8550"
+kind = "soc"
+git = "https://github.com/UniXNU/UniXNU-sm8550-common"
+# Upstream main as of 2026-10-31, "feat(patches): add the xnu-12377 SoC series".
+commit = "a9f45dc60c035084b95463781538380f4c3606c9"
