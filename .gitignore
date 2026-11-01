@@ -4,3 +4,9 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# Stock firmware drops. Never commit these: boot.img and recovery.img are
+# partition-sized dumps (192 MiB and 100 MiB) and GitHub rejects any blob over
+# 100 MB, so a commit containing one cannot be pushed at all. The values they
+# yielded are recorded in docs/firmware.md and dts/board.dts instead.
+/新建文件夹/

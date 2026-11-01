@@ -72,8 +72,8 @@ a different board — and should be treated as an experiment, not a fix.
 
 | Key | Value | Why |
 | --- | --- | --- |
-| `uefi_fd.base` | `0xA7100000` | Must equal the `UEFI FD` entry in `MemoryMapLib.c` |
-| `uefi_fd.size` | `0x300000` | 3 MiB inside the stock 4 MiB FD window at `0xA7000000` |
+| `uefi_fd.base` | `0xA7000000` | Must equal the `UEFI FD` entry in `MemoryMapLib.c`; also where the stock `uefi.elf` loads |
+| `uefi_fd.size` | `0x400000` | The full carveout the vendor reserves. The stock image is 3 MiB of it, so this leaves 1 MiB of headroom |
 | `boot_image.header_version` | `1` | v1/v2 keep the kernel slot at a fixed offset, which is what the BootShim payload layout expects |
 | `boot_image.base` | `0x0` | BootShim is position independent, so this only has to be reachable RAM |
 | `boot_image.kernel_offset` | `0x8000` | Same as sheng, the only SM8550 board known to boot through BootShim |
@@ -91,45 +91,50 @@ lint job now rejects the config if any of the five goes missing.
 The lint workflow also checks that `uefi_fd` agrees with `MemoryMapLib.c`,
 because a mismatch there produces a firmware that loads over its own memory map.
 
-## Memory map: not yet verified
+## Memory map: taken from the stock firmware
 
-`rmx3823Pkg/Library/MemoryMapLib/MemoryMapLib.c` still carries the QRD8550
-reference layout. That is a defensible starting point but it is **not**
-confirmed against this board.
+`rmx3823Pkg/Library/MemoryMapLib/MemoryMapLib.c` is no longer the QRD8550
+reference layout. It is this board's own map — 39 regions — transcribed from the
+`uefiplatLA.cfg` that the stock `uefi.elf` carries as an embedded string blob
+(the stock UEFI parses that text at boot: `PlatConfigFileName =
+"uefiplatLA.cfg"`). The extracted file is committed next to the table as
+`Platforms/Qualcomm/rmx3823Pkg/uefiplat-rmx3823.cfg`.
 
-What corroborates it: three carveouts that are independently observable from the
-board's own dtbo overlay (entry 1, machine `Kalama MTP,zonda-A/B`) land exactly
-where the reference map puts them.
+The extraction is checked mechanically rather than by eye: a script re-extracts
+the cfg from the ELF, parses both files and compares address, size and name row
+by row. 39 rows, exact match, no overlaps within any section.
 
-| Carveout in the overlay | Address | Reference map entry |
-| --- | --- | --- |
-| `aop_cmd_db_region` | `0x81C60000` | `AOP` `0x81C00000` + `0xA0000` |
-| `smem_region` | `0x81D00000` | `SMEM` base |
-| `gpu_micro_code_region` | `0x9B09A000` | inside `PIL Reserved` `0x8A800000` + `0x18280000` |
+Other files corroborate it independently:
 
-What is still unverified, and what it costs if wrong:
+| Evidence | Agrees with |
+| --- | --- |
+| `tz.mbn` entry point and first LOAD vaddr, `0x14680000` | `IMEM Base` `0x14680000` + `0x2A000` |
+| `tz.mbn` segment at `0xd830a000` | inside `TZApps Reserved` `0xD8800000` + `0x07400000` |
+| `aop_cmd_db_region` `0x81C60000` (dtbo overlay) | `AOP` `0x81C00000` + `0xA0000` |
+| `smem_region` `0x81D00000` (dtbo overlay) | `SMEM` base |
+| `gpu_micro_code_region` `0x9B09A000` (dtbo overlay) | inside `PIL Reserved` `0x8A800000` + `0x18280000` |
 
-- `Display Demura` and `Display Reserved` sizes are panel-specific.
-- `TZApps Reserved` size.
-- That `0xA8000000..0xB8000000` (`Kernel`) is genuinely unreserved — UEFI hands
-  that window to the next-stage kernel.
-- That the `0xA7100000` FD window is unreserved.
+Two things this table does **not** settle:
 
-Getting these wrong means UEFI either hands the kernel memory XBL still owns, or
-scribbles over a carveout. A boot failure at this stage should be treated as a
-memory-map problem before suspecting drivers.
+- It is not a description of installed RAM. It stops at `0x100000000`, so the
+  24 GiB this device reports is covered only up to the low 2 GiB window plus
+  carveouts. That is normal for Qualcomm UEFI — the kernel takes its range from
+  the ADT — but it means the ADT memory node in `dts/board.dts`, not this table,
+  is what has to be right about the top of RAM. That node is still provisional.
+- `Display Demura` and `Display Reserved` are panel-specific, and no panel model
+  has been identified yet. The sizes in the table are the vendor's own, which is
+  the best available answer, but they are the first thing to re-check if the
+  panel comes up wrong.
 
-The authoritative sources are, in order:
-
-1. The stock firmware's `uefiplat.cfg`, which is how shengPkg's 72 descriptors
-   were reconciled against 34 Linux DTS reservations.
-2. A dump of the running device's `/proc/device-tree/reserved-memory`, or
-   `/sys/firmware/fdt`.
-3. The `XBL DT` carveout at `0x81A00000`, which is the device tree XBL publishes
-   to the OS.
-
-None of these is reachable from `dtbo.img`: the overlays carry display,
-regulator and touch fragments, not the base memory map.
+Two deliberate departures from a literal transcription, both documented in the
+file itself. The vendor cfg marks both `NOMAP` entries `BuildHob = NoMap`, and
+Mu-Silicium has no such HobOption; they are emitted as `AddMem` + `MEM_RES` +
+`Reserv`, following `qrd8550Pkg`. And the regions the QRD8550 table carries that
+this board's cfg does not — GPU PRR, TPMControl, USB UCSI Shared, PLD_PEP,
+TZ STAT, ADSP RPC, MPSS_EFS and four PCIe apertures — were dropped rather than
+inherited: the gap `0x81F00000..0x8A800000` they would fill is not described by
+the vendor map at all, and a region absent from the table gets no HOB, so DXE
+neither allocates nor maps it.
 
 ## Building
 
