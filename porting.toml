@@ -29,18 +29,24 @@ findings = [
     "soc:configs/sm8550.config sets CONFIG_XNU_NATIVE_ADRENO=y while the device defconfig is applied last, so the two must be changed together with [components].",
     "unixnu builds only on macOS and Linux. On Windows, defconfig and status run, but the kernel, payload and firmware steps do not.",
     ".github/workflows/build.yml builds from this repository alone: it checks out upstream UniXNU/UniXNU as the engine, so the board needs no fork of the engine repository.",
+    "The firmware checkout is Janit8r/uefi-rmx3823, a fork of UniXNU/uefi-sheng on branch sheng. [firmware] now names config, dsc, fd, submodules and the full PACKAGES_PATH; Mu_Basecore is left out because the engine supplies it as {edk2}.",
+    "rmx3823Pkg is derived from Platforms/Qualcomm/qrd8550Pkg rather than nuwaPkg or shengPkg: RMX3823 is a non-Xiaomi board on the same Qualcomm boot_images baseline, and no rmx3823 set exists in Device-Binaries or Silicium-ACPI, so Binaries/qrd8550 and the qrd8550 ACPI tables are reused deliberately.",
+    "rmx3823Pkg is not buildable with Mu-Silicium's build_uefi.py: it carries UniXNUPkg and DarwinBootPkg in its DSC/FDF the way shengPkg does, and build_uefi.py has no PACKAGES_PATH for them. It must go through ./unixnu build firmware --uefi.",
 ]
 completion = ["All source pins resolve; every selected component has a record; status shows the intended overrides and patch order."]
 limits = [
     "The memory base and size, and the reserved-memory sizes, are provisional.",
     "Panel and touch are not identified; both need the vendor device tree from the firmware package.",
-    "No uefi-rmx3823 firmware checkout exists yet.",
+    "rmx3823Pkg has not been compiled yet; the first firmware build is unverified.",
+    "The rmx3823Pkg memory map is still the QRD8550 reference layout. Sizes for Display Demura, Display Reserved and TZApps, and the freedom of the Kernel and UEFI FD windows, need the stock uefiplat.cfg or a device dump.",
 ]
-next_action = ["Push this repository and run the macOS workflow with steps = kernel to get the first kernel build."]
+next_action = ["Run ./unixnu build firmware --uefi ../uefi-rmx3823 and reconcile rmx3823Pkg/Library/MemoryMapLib against the stock firmware memory map."]
 evidence = [
     { kind = "source", reference = "docs/hardware-survey.md", result = "Device reads: soc_id 519, machine KALAMA, 8 cores (3x A510, 2x A710, 2x A715, 1x X3), page size 4096, 23645600 kB, panel 1240x2772." },
     { kind = "source", reference = "dts/board.dts", result = "Board tree includes sm8550.dtsi and carries the memory range and the reservations read from the device." },
     { kind = "host", reference = "configs/rmx3823_defconfig", result = "unixnu defconfig resolved the OS profile and wrote a merged .config with the board deltas applied last.", command = "python unixnu defconfig rmx3823_defconfig --device .", revision = "3fda57be4ea8f454369bed38ffedf201723625c4" },
+    { kind = "source", reference = "uefi-rmx3823@13f21d78 Platforms/Qualcomm/rmx3823Pkg", result = "rmx3823Pkg created from qrd8550Pkg: renamed package and files, new PLATFORM_GUID, realme/RMX3823 SMBIOS, 1240x2772 framebuffer, and the QRD8550 memory map kept with its verification gaps documented in MemoryMapLib.c." },
+    { kind = "source", reference = "uefi-rmx3823@daaea13b Resources/Configs/rmx3823.toml", result = "FD base 0xA7100000 size 0x300000 matching the UEFI FD map entry, header_version 1 following nuwa, append_dtb false because no rmx3823.dtb exists." },
 ]
 
 [[area]]

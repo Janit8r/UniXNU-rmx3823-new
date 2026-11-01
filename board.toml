@@ -28,11 +28,42 @@ include_dirs = ["soc:dts"]
 # checkout: build the firmware device tree the boot image carries, check the memory map.
 # preflight = ["scripts/check-rmx3823-firmware.py"]
 
-# The uefi-rmx3823 checkout does not exist yet. These paths are the intended layout.
+# The uefi-rmx3823 checkout (a fork of UniXNU/uefi-sheng, branch sheng). Pass it with
+# ./unixnu build firmware --uefi ../uefi-rmx3823
+#
+# rmx3823Pkg is derived from Platforms/Qualcomm/qrd8550Pkg, the SM8550 reference
+# design, and carries the UniXNU integration in its DSC/FDF/DXE.inc the same way
+# shengPkg does. It is therefore NOT buildable with the Mu-Silicium build_uefi.py:
+# that path has no PACKAGES_PATH for UniXNUPkg or DarwinBootPkg.
 config = "rmx3823"
-dsc = "Platforms/Qualcomm/Rmx3823Pkg/Rmx3823Pkg.dsc"
-fd = "Build/Rmx3823Pkg/{target}_CLANGPDB/FV/SILICIUM_UEFI.fd"
-packages = ["{uefi}", "{tree}/package", "{tree}/drivers/DarwinBoot", "{edk2}"]
+dsc = "Platforms/Qualcomm/rmx3823Pkg/rmx3823.dsc"
+fd = "Build/rmx3823Pkg/{target}_CLANGPDB/FV/SILICIUM_UEFI.fd"
+
+# Mu_Basecore is deliberately absent: the engine supplies it as {edk2}.
+submodules = [
+  "Binaries",
+  "Common/Mu",
+  "Common/Mu_OEM_Sample",
+  "Silicon/Qualcomm",
+  "Silicon/Silicium",
+  "Silicium-ACPI",
+]
+
+# PACKAGES_PATH. {uefi} is the uefi-rmx3823 checkout, {edk2} is Mu_Basecore, {tree}
+# is the assembled build tree of this repository.
+packages = [
+  "{uefi}",
+  "{uefi}/Common/Mu",
+  "{uefi}/Common/Mu_OEM_Sample",
+  "{uefi}/Silicon/Qualcomm",
+  "{uefi}/Silicon/Silicium",
+  "{uefi}/Silicium-ACPI",
+  "{uefi}/Silicium-ACPI/Platforms/Qualcomm",
+  "{uefi}/Silicium-ACPI/Silicon/Qualcomm",
+  "{tree}/package",
+  "{tree}/drivers/DarwinBoot",
+  "{edk2}",
+]
 
 [bootimg]
 # The device tree of the boot image, relative to the build tree; a firmware preflight
@@ -40,7 +71,11 @@ packages = ["{uefi}", "{tree}/package", "{tree}/drivers/DarwinBoot", "{edk2}"]
 # dtb = "build/rmx3823/rmx3823.dtb"
 
 [firmware.defines]
-DEVICE_MODEL = "RMX3823"
+# FD_BASE, FD_SIZE and FD_BLOCKS are supplied by the engine from
+# Resources/Configs/rmx3823.toml [uefi_fd], so they must not be repeated here.
+#
+# DEVICE_MODEL is intentionally absent: rmx3823 has a single hardware model, and
+# rmx3823.dsc never branches on it.
 
 [payload]
 volume = "RMX3823"
