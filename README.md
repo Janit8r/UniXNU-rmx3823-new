@@ -47,9 +47,10 @@ Building requires macOS or Linux. On Windows, only `defconfig` and `status` run.
 ./unixnu build kernel --device ../UniXNU-rmx3823
 ```
 
-On a Windows host, build in CI instead: run the `macOS build` workflow in the
-UniXNU checkout with `device_repository = <owner>/UniXNU-rmx3823`,
-`device_ref = main`, `defconfig = rmx3823_defconfig` and `steps = kernel`.
+On a Windows host, build in CI instead. `.github/workflows/build.yml` checks out
+upstream `UniXNU/UniXNU` as the engine and this repository as the device, so no
+engine fork is needed. Run it from the Actions tab, or push to `main` when
+`board.toml`, `configs/`, `dts/` or `patches/` change.
 
 `local.toml` is ignored by Git and points the SoC source at a local checkout.
 

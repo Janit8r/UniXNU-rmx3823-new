@@ -1,0 +1,139 @@
+name: macOS build
+
+# Builds this board against upstream UniXNU. The device repository is the only
+# repository that needs to be maintained: the engine is checked out here, not forked.
+
+on:
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: Steps to build
+        type: choice
+        options:
+          - kernel
+          - kernel payload
+        default: kernel
+      unixnu_ref:
+        description: UniXNU revision to build against
+        required: true
+        default: main
+  push:
+    branches: [main]
+    paths:
+      - board.toml
+      - feeds.toml
+      - configs/**
+      - dts/**
+      - patches/**
+      - .github/workflows/build.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: 1
+  HOMEBREW_NO_INSTALL_CLEANUP: 1
+  HOMEBREW_NO_ENV_HINTS: 1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 360
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      UNIXNU_DEVICE: ${{ github.workspace }}/device
+      DEFCONFIG: rmx3823_defconfig
+      STEPS: ${{ inputs.steps || 'kernel' }}
+    steps:
+      - name: Check out UniXNU
+        uses: actions/checkout@v4
+        with:
+          repository: UniXNU/UniXNU
+          ref: ${{ inputs.unixnu_ref || 'main' }}
+          persist-credentials: false
+
+      - name: Check out the device repository
+        uses: actions/checkout@v4
+        with:
+          path: device
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Check the inputs
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          [ -f device/board.toml ] || fail "the device repository has no board.toml"
+          [ -f "device/configs/$DEFCONFIG" ] || fail "device/configs/$DEFCONFIG not found"
+          [ -d "$DEVELOPER_DIR" ] || fail "Xcode not found at $DEVELOPER_DIR; installed: $(printf '%s ' /Applications/Xcode_*.app)"
+          if [ "$STEPS" = "kernel payload" ]; then
+            fail "the payload step needs uefi-rmx3823 and the platform seed; not wired up yet"
+          fi
+
+      - name: Install host tools
+        run: |
+          brew install llvm lld mtools dtc
+          if ! command -v unifdef >/dev/null; then
+            brew install unifdef
+            echo "$(brew --prefix unifdef)/bin" >> "$GITHUB_PATH"
+          fi
+
+      - name: Report the runner toolchain
+        run: |
+          sw_vers
+          uname -m
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          clang --version | awk 'NR==1'
+          python3 --version
+          missing=0
+          for tool in git make clang cmake ninja unifdef ld.lld mformat mcopy dtc xcodebuild; do
+            path=$(command -v "$tool" || true)
+            printf '%-10s %s\n' "$tool" "${path:-MISSING}"
+            [ -n "$path" ] || missing=1
+          done
+          exit "$missing"
+
+      - name: Configure
+        run: ./unixnu defconfig "$DEFCONFIG" --device device
+
+      - name: Build kernel
+        id: kernel
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./unixnu build kernel --device device
+
+      - name: Upload the build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ github.run_attempt }}
+          path: out/**/logs/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Summary
+        if: always()
+        env:
+          KERNEL: ${{ steps.kernel.outcome }}
+        run: |
+          {
+            echo "## macOS build: rmx3823 (${DEFCONFIG}, ${STEPS})"
+            echo
+            echo "| Step | Result |"
+            echo "| --- | --- |"
+            echo "| kernel | ${KERNEL:-see the step list} |"
+            echo
+            echo "Only text logs are published. No images are uploaded."
+          } >> "$GITHUB_STEP_SUMMARY"
+          xcodebuild -version | awk 'NR==1'
