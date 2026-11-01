@@ -8,9 +8,9 @@ summary = "realme GT5 240W (RMX3823). Reuses UniXNU-sm8550-common; board inputs 
 
 [[area]]
 id = "configuration"
-status = "in-progress"
+status = "implemented"
 components = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot"]
-paths = ["board.toml", "feeds.toml", "configs/**", ".gitmodules", ".github/**", ".gitignore"]
+paths = ["board.toml", "feeds.toml", "configs/**", ".github/**", ".gitignore"]
 inputs = ["SM8550 kalama SoC support from UniXNU-sm8550-common, pinned at a9f45dc6."]
 configuration = [
     "board.toml sets soc_source = sm8550, defconfig = rmx3823_defconfig, device_tree.source = device:dts/board.dts.",
@@ -37,9 +37,9 @@ limits = [
 ]
 next_action = ["Push this repository and run the macOS workflow with steps = kernel to get the first kernel build."]
 evidence = [
-    "adb getprop ro.build.display.id = RMX3823_16.0.7.200(CN01), Android 16, build date 2026-05-14.",
-    "adb /sys/devices/soc0/soc_id = 519, machine = KALAMA, revision = 2.0.",
-    "Stock dtbo.img entry 1: model = Qualcomm Technologies, Inc. Kalama MTP,zonda-A, 167 fragments.",
+    { kind = "source", reference = "docs/hardware-survey.md", result = "Device reads: soc_id 519, machine KALAMA, 8 cores (3x A510, 2x A710, 2x A715, 1x X3), page size 4096, 23645600 kB, panel 1240x2772." },
+    { kind = "source", reference = "dts/board.dts", result = "Board tree includes sm8550.dtsi and carries the memory range and the reservations read from the device." },
+    { kind = "host", reference = "configs/rmx3823_defconfig", result = "unixnu defconfig resolved the OS profile and wrote a merged .config with the board deltas applied last.", command = "python unixnu defconfig rmx3823_defconfig --device .", revision = "3fda57be4ea8f454369bed38ffedf201723625c4" },
 ]
 
 [[area]]
