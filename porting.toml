@@ -45,8 +45,8 @@ evidence = [
     { kind = "source", reference = "docs/hardware-survey.md", result = "Device reads: soc_id 519, machine KALAMA, 8 cores (3x A510, 2x A710, 2x A715, 1x X3), page size 4096, 23645600 kB, panel 1240x2772." },
     { kind = "source", reference = "dts/board.dts", result = "Board tree includes sm8550.dtsi and carries the memory range and the reservations read from the device." },
     { kind = "host", reference = "configs/rmx3823_defconfig", result = "unixnu defconfig resolved the OS profile and wrote a merged .config with the board deltas applied last.", command = "python unixnu defconfig rmx3823_defconfig --device .", revision = "3fda57be4ea8f454369bed38ffedf201723625c4" },
-    { kind = "source", reference = "uefi-rmx3823@13f21d78 Platforms/Qualcomm/rmx3823Pkg", result = "rmx3823Pkg created from qrd8550Pkg: renamed package and files, new PLATFORM_GUID, realme/RMX3823 SMBIOS, 1240x2772 framebuffer, and the QRD8550 memory map kept with its verification gaps documented in MemoryMapLib.c." },
-    { kind = "source", reference = "uefi-rmx3823@daaea13b Resources/Configs/rmx3823.toml", result = "FD base 0xA7100000 size 0x300000 matching the UEFI FD map entry, header_version 1 following nuwa, append_dtb false because no rmx3823.dtb exists." },
+    { kind = "source", reference = "docs/firmware.md", result = "Records the firmware layout: rmx3823Pkg descends from qrd8550Pkg, reuses Binaries/qrd8550 and the qrd8550 ACPI tables, carries the UniXNU module set, and keeps the QRD8550 memory map with its verification gaps named." },
+    { kind = "source", reference = "board.toml", result = "[firmware] names Platforms/Qualcomm/rmx3823Pkg/rmx3823.dsc, the FV output path, the six Mu-Silicium submodules and the full PACKAGES_PATH including {tree}/package and {tree}/drivers/DarwinBoot." },
 ]
 
 [[area]]
