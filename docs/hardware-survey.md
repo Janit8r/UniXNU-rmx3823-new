@@ -141,3 +141,96 @@ uefi-rmx3823/           Mu-Silicium UEFI 固件 ← 尚不存在，工作量最�
 3. **面板驱动**：realme 定制 AMOLED，无开源面板驱动，需从 vendor 内核或 dtbo 反推初始化序列。这是最耗时的部分。
 4. **无硬件验证先例**：SM8550 手机侧目前没有任何一台有成功记录（`fuxi` 亦然）。
 5. **工具链过旧**：本机 `adb` 为 1.0.26.29（2014 年）、`fastboot` 更老，均需升级到 platform-tools 最新版，否则刷写阶段会出问题。
+
+## 10. 原厂固件解析结果（2026-11-01）
+
+用户提供了 5 个原厂固件文件（`uefi.elf`、`uefi_sec.mbn`、`tz.mbn`、`boot.img`、
+`recovery.img`）。这一批把「内存表」和「触摸」两个悬空项都解决了。
+
+### 10.1 `uefi.elf` —— 原厂 UEFI，也是内存表的权威来源
+
+- ELF64，入口 `0xA7000000`，单一 LOAD 段 `0xA7000000` + `0x300000`。
+  这就是原厂固件卷的位置和大小。
+- 固件卷内嵌了完整的 `uefiplatLA.cfg` 文本（原厂 UEFI 启动时按
+  `PlatConfigFileName = "uefiplatLA.cfg"` 解析）。在文件偏移 `0x4703C` 处以
+  字符串 blob 形式存在，提取后 204 行、纯 ASCII。
+- 该配置声明 `Version = 3`、`MaxMemoryRegions = 74`，实际使用 39 个区域：
+  25 个 DDR、2 个 IMEM、12 个寄存器窗口。已逐条转录进
+  `uefi-rmx3823` 的 `rmx3823Pkg/Library/MemoryMapLib/MemoryMapLib.c`，
+  并用脚本逐行比对，39 行完全一致、分段内零重叠。
+
+关键数值：
+
+| 区域 | 地址 + 大小 | 说明 |
+| --- | --- | --- |
+| NOMAP | `0x80000000 + 0x01200000` | gunyah_hyp + cpusys_vm |
+| XBL DT | `0x81A00000 + 0x00040000` | XBL 发布的设备树 |
+| AOP | `0x81C00000 + 0x000A0000` | 含 aop_cmd_db / aop_config |
+| SMEM | `0x81D00000 + 0x00200000` | 旧 DTS 写 `0x400000`，偏大一倍 |
+| PIL Reserved | `0x8A800000 + 0x18280000` | 覆盖全部 PIL 子区 |
+| Display Demura | `0xA2A80000 + 0x02B00000` | |
+| UEFI FD | `0xA7000000 + 0x00400000` | 原厂镜像占前 3 MiB |
+| UEFI FD Reserved | `0xA7400000 + 0x00200000` | |
+| Kernel | `0xA8000000 + 0x10000000` | 原厂内核窗口，ABL 装 boot.img 处 |
+| Display Reserved | `0xB8000000 + 0x02B00000` | |
+| DXE Heap | `0xBAB00000 + 0x0D1C0000` | **唯一标为 Conventional 的连续区** |
+| TZApps Reserved | `0xD8800000 + 0x07400000` | |
+
+其他可用配置项：`NumCpus = 8`、`NumActiveCores = 8`、
+`ShmBridgememSize = 0xA00000`、`SecurityFlag = 0xC4`、
+`DefaultBDSBootApp = "LinuxLoader"`、`EnableShell = 0x1`。
+
+### 10.2 三方交叉验证
+
+- `tz.mbn` 入口点与首个 LOAD 段地址 `0x14680000`，等于配置里的
+  `IMEM Base`；其 `0xd830a000` 段落在 `TZApps Reserved` 内。
+- dtbo overlay 里 `aop_cmd_db_region@81c60000`、`smem_region@81d00000`、
+  `gpu_micro_code_region@9b09a000` 三者都落在配置对应区域内。
+
+### 10.3 `boot.img` / `recovery.img` 没有基础设备树
+
+两者都是 **header_version 4**，该格式把基础 DTB 放在 `vendor_boot.img`，
+不在 `boot.img` 里。全文件扫描无 DTB 魔数（`d00dfeed`）。因此
+**面板型号仍然未知**，需要 `vendor_boot.img` 或设备 `/sys/firmware/fdt`。
+
+顺带：`boot.img` 恰好 192 MiB、`recovery.img` 恰好 100 MiB，是分区大小的
+原始 dump，不是紧凑的镜像文件。
+
+### 10.4 触摸控制器：Synaptics S3910（SPI）
+
+从 `dtbo.img` 条目 1（`Kalama MTP,zonda-A/B`）的 `fragment@66` 得到，三个
+候选里只有它 `status = "ok"`：
+
+| 节点 | 状态 |
+| --- | --- |
+| `synaptics_tcm@0`（`synaptics,tcm-spi`） | **ok** |
+| `goodix-berlin@5d` | disabled |
+| `synaptics_tcm_hbp@0` | disabled |
+
+启用节点的参数：
+
+| 项 | 值 |
+| --- | --- |
+| chip-name | `S3910` |
+| 总线 | SPI，CS0，`spi-max-frequency` `0xE4E1C0`（15 MHz） |
+| IRQ | GPIO 25，`interrupts = <25 0x2008>`（下降沿 + ONESHOT） |
+| reset | GPIO 24 |
+| avdd | GPIO 10 |
+| 触摸点阵 | TX 17 × RX 38（`0x11 × 0x26`） |
+| `panel_type` | 7 |
+| `firmware_name` | `AB641` |
+| `display-coords` | `0x4D8 × 0xAD4` = **1240 × 2772**，与实机分辨率一致 |
+
+移植含义：`drivers/ShengNovatekTouch` 用不上，需要 Synaptics TCM（SPI）
+实现。dtbo 里同时存在 `goodix` 节点（`panel-max-x 0x438`、`max-y 0x960`，
+即 1080×2400），说明该机型存在不同面板/触摸的 SKU，本机是 1240×2772 +
+S3910。
+
+### 10.5 仍未解决
+
+1. **面板型号**：缺 `vendor_boot.img` 或设备端 FDT。`panel_type = 7` 与
+   1240×2772 是唯一线索。
+2. **实际内存容量**：原厂映射止于 `0x100000000`，不描述已装 DRAM。24 GiB
+   仍是从 `MemTotal 23645600 kB` 推断。
+3. **UEFI 安全应用**：`uefi_sec.mbn` 含 OPLUS 密钥，与移植无关，仅确认机型
+   为 OPLUS SM8550。
