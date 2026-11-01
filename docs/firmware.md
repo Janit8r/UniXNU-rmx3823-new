@@ -75,11 +75,21 @@ a different board — and should be treated as an experiment, not a fix.
 | `uefi_fd.base` | `0xA7100000` | Must equal the `UEFI FD` entry in `MemoryMapLib.c` |
 | `uefi_fd.size` | `0x300000` | 3 MiB inside the stock 4 MiB FD window at `0xA7000000` |
 | `boot_image.header_version` | `1` | v1/v2 keep the kernel slot at a fixed offset, which is what the BootShim payload layout expects |
+| `boot_image.base` | `0x0` | BootShim is position independent, so this only has to be reachable RAM |
+| `boot_image.kernel_offset` | `0x8000` | Same as sheng, the only SM8550 board known to boot through BootShim |
+| `boot_image.tags_offset` | `0x1E00000` | Same as sheng |
+| `boot_image.pagesize` | `4096` | Same as sheng |
 | `boot_image_kernel.append_dtb` | `false` | No `Resources/DTBs/rmx3823.dtb` exists, and XNU takes its ADT from this repository's `dts/board.dts` anyway |
 
-The lint workflow in the firmware repository checks that the first two agree
-with `MemoryMapLib.c`, because a mismatch there produces a firmware that loads
-over its own memory map.
+All five `boot_image` fields are stated even though they are the engine's
+defaults, because `build_uefi.py` gets its defaults from `mkbootimg.py`
+instead — `base 0x10000000`, `pagesize 2048`. With only `header_version` set,
+the two build paths produced different images, and `mkbootimg.py`'s kernel
+address `0x10008000` is not in SM8550's DDR at all. The firmware repository's
+lint job now rejects the config if any of the five goes missing.
+
+The lint workflow also checks that `uefi_fd` agrees with `MemoryMapLib.c`,
+because a mismatch there produces a firmware that loads over its own memory map.
 
 ## Memory map: not yet verified
 
@@ -138,6 +148,13 @@ driver checks that its size matches `uefi_fd.size` before accepting it.
 
 ## Status
 
-The package has been created and integrated but **has never been compiled**.
-The first firmware build is the next step, followed by reconciling the memory
-map against the stock firmware.
+The firmware builds. `uefi-rmx3823` workflow run 41276749199 compiled
+`rmx3823Pkg` on ubuntu-24.04 with `UniXNU.efi`, `UniXNUDxe.efi`,
+`UniXNURamDiskDxe.efi`, `UniXNULib` and `DarwinBoot.efi` in the volume, and
+produced a `SILICIUM_UEFI.fd` of exactly `0x300000` bytes plus a boot image.
+
+Nothing has run on hardware. The two things that must be settled before a flash
+is worth attempting are the memory map (above) and whether the ABL accepts the
+boot image at all — a rejection there shows as the device dropping straight back
+to fastboot with nothing on screen, which is distinct from a memory-map fault
+later in DXE.

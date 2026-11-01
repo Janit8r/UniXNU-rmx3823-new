@@ -32,15 +32,17 @@ findings = [
     "The firmware checkout is Janit8r/uefi-rmx3823, a fork of UniXNU/uefi-sheng on branch sheng. [firmware] now names config, dsc, fd, submodules and the full PACKAGES_PATH; Mu_Basecore is left out because the engine supplies it as {edk2}.",
     "rmx3823Pkg is derived from Platforms/Qualcomm/qrd8550Pkg rather than nuwaPkg or shengPkg: RMX3823 is a non-Xiaomi board on the same Qualcomm boot_images baseline, and no rmx3823 set exists in Device-Binaries or Silicium-ACPI, so Binaries/qrd8550 and the qrd8550 ACPI tables are reused deliberately.",
     "rmx3823Pkg is not buildable with Mu-Silicium's build_uefi.py: it carries UniXNUPkg and DarwinBootPkg in its DSC/FDF the way shengPkg does, and build_uefi.py has no PACKAGES_PATH for them. It must go through ./unixnu build firmware --uefi.",
+    "rmx3823Pkg compiles. uefi-rmx3823 run 41276749199 built it on ubuntu-24.04 with UniXNU.efi, UniXNUDxe.efi, UniXNURamDiskDxe.efi, UniXNULib and DarwinBoot.efi in the volume, and the firmware volume came out at exactly 0x300000 bytes.",
+    "That build needed a fix first: [boot_image] carried only header_version, so build_uefi.py fell back to mkbootimg.py's defaults and produced kernel_addr 0x10008000 with pagesize 2048. SM8550's DDR starts at 0x80000000, so that address is not memory. The engine's own bootimg step uses different defaults (base 0, pagesize 4096), which is why the two paths disagreed silently. All five fields are now explicit.",
 ]
 completion = ["All source pins resolve; every selected component has a record; status shows the intended overrides and patch order."]
 limits = [
     "The memory base and size, and the reserved-memory sizes, are provisional.",
     "Panel and touch are not identified; both need the vendor device tree from the firmware package.",
-    "rmx3823Pkg has not been compiled yet; the first firmware build is unverified.",
     "The rmx3823Pkg memory map is still the QRD8550 reference layout. Sizes for Display Demura, Display Reserved and TZApps, and the freedom of the Kernel and UEFI FD windows, need the stock uefiplat.cfg or a device dump.",
+    "Nothing has run on hardware. Whether the RMX3823 ABL accepts the boot image is unverified; a rejection shows as the device dropping to fastboot with nothing on screen.",
 ]
-next_action = ["Run ./unixnu build firmware --uefi ../uefi-rmx3823 and reconcile rmx3823Pkg/Library/MemoryMapLib against the stock firmware memory map."]
+next_action = ["Flash the CI boot image and capture the serial log; in parallel reconcile rmx3823Pkg/Library/MemoryMapLib against the stock firmware memory map."]
 evidence = [
     { kind = "source", reference = "docs/hardware-survey.md", result = "Device reads: soc_id 519, machine KALAMA, 8 cores (3x A510, 2x A710, 2x A715, 1x X3), page size 4096, 23645600 kB, panel 1240x2772." },
     { kind = "source", reference = "dts/board.dts", result = "Board tree includes sm8550.dtsi and carries the memory range and the reservations read from the device." },
